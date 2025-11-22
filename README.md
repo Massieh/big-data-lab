@@ -1,35 +1,13 @@
-# Prerequisites
+# Steps to Run
 
-GCP Account with permissions to create Compute Engine VMs and VPCs.
+Configure Terraform
+Edit terraform.tfvars with your desired settings (region, instance types, etc.).
 
-Google Cloud Service Account JSON key downloaded locally.
-
-Terraform installed (v1.5+ recommended).
-
-Ansible installed (v2.10+ recommended).
-
-WSL/Linux shell (or Linux/MacOS) for proper SSH key permissions.
-
-Spark tarball: spark-2.4.3-bin-hadoop2.7.tgz downloaded locally.
-
-# Step 1: Configure Terraform
-
-Edit terraform/terraform.tfvars
-Replace project_id and credentials_file with your project details.4
-
-# Step 2: Provision GCP Infrastructure
-
-cd terraform
 terraform init
-terraform plan
 terraform apply
 
-# Step 4: Configure Ansible Inventory
+grab the IPs and write them in inventory.yaml
 
-Edit ansible/inventory.ini:
+ansible-playbook install_spark.yml
 
-# Step 5: Deploy Spark Cluster & WordCount
-
-Run the playbook:
-cd ansible
-ansible-playbook -i inventory.ini deploy_spark_wordcount.yml
+ansible-playbook compile_and_run.yml

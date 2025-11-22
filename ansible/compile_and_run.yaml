@@ -1,0 +1,57 @@
+---
+- name: Compile and Spark-submit WordCount
+  hosts: edge
+  become: yes
+  tasks:
+
+    - name: Install OpenJDK and Maven
+      apt:
+        name:
+          - default-jdk
+          - maven
+        state: present
+
+    - name: Create project directory
+      file:
+        path: /opt/wordcount
+        state: directory
+
+    - name: Copy WordCount.java
+      copy:
+        src: wordcount/WordCount.java
+        dest: /opt/wordcount/WordCount.java
+
+    - name: Set Spark classpath
+      shell: "CP=$(echo /opt/spark/jars/*.jar | tr ' ' ':') && echo $CP > /opt/classpath.txt"
+      args:
+        executable: /bin/bash
+
+    - name: Compile WordCount
+      shell: |
+        cd /opt/wordcount
+        javac -cp "$(cat /opt/classpath.txt)" WordCount.java
+      args:
+        executable: /bin/bash
+
+    - name: Create JAR
+      shell: |
+        cd /opt/wordcount
+        jar cf wc.jar WordCount*.class
+
+    - name: Create sample text file
+      copy:
+        dest: /opt/wordcount/filesample.txt
+        content: |
+          test test Test Test Massieh Massieh
+
+    - name: Remove previous result directory if exists
+      shell: "rm -rf /opt/wordcount/result"
+
+    - name: Run WordCount
+      shell: |
+        cd /opt/wordcount
+        /opt/spark/bin/spark-submit \
+          --class WordCount \
+          --master spark://{{ hostvars['master']['ansible_host'] }}:7077 \
+          /opt/wordcount/wc.jar \
+        > /opt/wordcount/run.log 2>&1

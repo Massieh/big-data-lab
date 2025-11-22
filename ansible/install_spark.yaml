@@ -1,0 +1,67 @@
+- name: Configure Spark Cluster
+  hosts: all
+  become: yes
+  tasks:
+
+  - name: Install dependencies
+    apt:
+      name:
+        - default-jdk
+        - wget
+      state: present
+      update_cache: yes
+
+  - name: Download Spark
+    get_url:
+      url: https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3.tgz
+      dest: /opt/spark.tgz
+
+  - name: Extract Spark
+    unarchive:
+      src: /opt/spark.tgz
+      dest: /opt/
+      remote_src: yes
+
+  - name: Create symlink
+    file:
+      src: /opt/spark-3.5.0-bin-hadoop3
+      dest: /opt/spark
+      state: link
+
+  - name: Set environment variables
+    lineinfile:
+      path: /etc/profile
+      line: 'export PATH=$PATH:/opt/spark/bin'
+      state: present
+
+- name: Configure Master
+  hosts: master
+  become: yes
+  tasks:
+  - name: Configure slaves file
+    copy:
+      dest: /opt/spark/conf/workers
+      content: |
+        worker1
+        worker2
+
+- name: Configure Spark Master
+  hosts: master
+  become: yes
+  tasks:
+    - name: Start Spark Master if not running
+      shell: |
+        pgrep -f "org.apache.spark.deploy.master.Master" || \
+        /opt/spark/sbin/start-master.sh
+
+
+
+- name: Configure Spark Workers
+  hosts: worker1,worker2
+  become: yes
+  tasks:
+    - name: Start Spark Worker if not running
+      shell: |
+        pgrep -f "org.apache.spark.deploy.worker.Worker" || \
+        /opt/spark/sbin/start-worker.sh spark://spark-master:7077
+
