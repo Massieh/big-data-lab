@@ -1,6 +1,5 @@
+import java.io.File;
 import java.util.Arrays;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -12,15 +11,15 @@ public class WordCount {
         String inputFile = "/opt/wordcount/filesample.txt";
         String outputFile = "/opt/wordcount/result";
 
-        SparkConf conf = new SparkConf().setAppName("WordCount");
-        JavaSparkContext sc = new JavaSparkContext(conf);
-        Path outputPath = new Path(outputFile);
-        FileSystem fs = FileSystem.get(sc.hadoopConfiguration());
-        if (fs.exists(outputPath)) {
-            fs.delete(outputPath, true);
+        File outDir = new File(outputFile);
+        if (outDir.exists()) {
+            deleteDirectory(outDir);
         }
 
         long t1 = System.currentTimeMillis();
+
+        SparkConf conf = new SparkConf().setAppName("WordCount");
+        JavaSparkContext sc = new JavaSparkContext(conf);
 
         JavaRDD<String> data = sc.textFile(inputFile)
                                  .flatMap(s -> Arrays.asList(s.split(" ")).iterator());
@@ -37,5 +36,15 @@ public class WordCount {
         System.out.println("======================");
 
         sc.close(); 
+    }
+
+    public static void deleteDirectory(File directoryToBeDeleted) {
+        File[] allContents = directoryToBeDeleted.listFiles();
+        if (allContents != null) {
+            for (File file : allContents) {
+                deleteDirectory(file);
+            }
+        }
+        directoryToBeDeleted.delete();
     }
 }

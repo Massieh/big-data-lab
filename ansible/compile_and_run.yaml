@@ -37,6 +37,13 @@
       shell: |
         cd /opt/wordcount
         jar cf wc.jar WordCount*.class
+  
+    - name: Ensure wordcount files are here
+      file:
+        path: /opt/wordcount
+        owner: debian
+        group: debian
+        recurse: yes
 
     - name: Create sample text file
       copy:
@@ -48,10 +55,7 @@
       shell: "rm -rf /opt/wordcount/result"
 
     - name: Run WordCount
-      shell: |
-        cd /opt/wordcount
-        /opt/spark/bin/spark-submit \
-          --class WordCount \
-          --master spark://{{ hostvars['master']['ansible_host'] }}:7077 \
-          /opt/wordcount/wc.jar \
+      shell: >
+        cd /opt/wordcount &&
+        /opt/spark/bin/spark-submit --class WordCount --master spark://{{ hostvars['master']['internal_ip'] }}:7077 /opt/wordcount/wc.jar
         > /opt/wordcount/run.log 2>&1

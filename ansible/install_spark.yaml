@@ -1,67 +1,95 @@
-- name: Configure Spark Cluster
+---
+- name: Install Spark and Hadoop dependencies
   hosts: all
   become: yes
   tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - default-jdk
+          - wget
+          - maven
+        state: present
+        update_cache: yes
 
-  - name: Install dependencies
-    apt:
-      name:
-        - default-jdk
-        - wget
-      state: present
-      update_cache: yes
+    - name: Download Spark
+      get_url:
+        url: https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3.tgz
+        dest: /opt/spark.tgz
 
-  - name: Download Spark
-    get_url:
-      url: https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3.tgz
-      dest: /opt/spark.tgz
+    - name: Extract Spark
+      unarchive:
+        src: /opt/spark.tgz
+        dest: /opt/
+        remote_src: yes
+        creates: /opt/spark-3.5.0-bin-hadoop3
 
-  - name: Extract Spark
-    unarchive:
-      src: /opt/spark.tgz
-      dest: /opt/
-      remote_src: yes
+    - name: Create Spark symlink
+      file:
+        src: /opt/spark-3.5.0-bin-hadoop3
+        dest: /opt/spark
+        state: link
 
-  - name: Create symlink
-    file:
-      src: /opt/spark-3.5.0-bin-hadoop3
-      dest: /opt/spark
-      state: link
+    - name: Export Spark to PATH
+      lineinfile:
+        path: /etc/profile
+        line: 'export PATH=$PATH:/opt/spark/bin'
+        state: present
 
-  - name: Set environment variables
-    lineinfile:
-      path: /etc/profile
-      line: 'export PATH=$PATH:/opt/spark/bin'
-      state: present
-
-- name: Configure Master
-  hosts: master
+- name: Add spark-master to /etc/hosts on all nodes
+  hosts: all
   become: yes
   tasks:
-  - name: Configure slaves file
-    copy:
-      dest: /opt/spark/conf/workers
-      content: |
-        worker1
-        worker2
+    - name: Write entry to hosts file
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars['master']['internal_ip'] }} spark-master"
+        state: present
 
 - name: Configure Spark Master
   hosts: master
   become: yes
   tasks:
-    - name: Start Spark Master if not running
-      shell: |
-        pgrep -f "org.apache.spark.deploy.master.Master" || \
-        /opt/spark/sbin/start-master.sh
+    - name: Write workers file
+      copy:
+        dest: /opt/spark/conf/workers
+        content: |
+          worker1
+          worker2
 
+    - name: Stop existing master process if running
+      shell: pkill -f "org.apache.spark.deploy.master.Master"
+      failed_when: false
+      changed_when: false
 
+    - name: Start Spark Master
+      shell: /opt/spark/sbin/start-master.sh
 
-- name: Configure Spark Workers
+    - name: Wait for Spark Master web UI to respond
+      uri:
+        url: http://localhost:8080
+        status_code: 200
+        validate_certs: no
+      register: master_ready
+      retries: 10
+      delay: 5
+      until: master_ready.status == 200
+
+- name: Start Spark Workers
   hosts: worker1,worker2
   become: yes
   tasks:
-    - name: Start Spark Worker if not running
-      shell: |
-        pgrep -f "org.apache.spark.deploy.worker.Worker" || \
-        /opt/spark/sbin/start-worker.sh spark://spark-master:7077
+    - name: Stop existing worker process if running
+      shell: pkill -f "org.apache.spark.deploy.worker.Worker"
+      failed_when: false
+      changed_when: false
 
+    - name: Start Spark Worker
+      shell: "/opt/spark/sbin/start-worker.sh spark://{{ hostvars['master']['internal_ip'] }}:7077"
+
+    - name: Verify worker connected to master
+      shell: pgrep -f "org.apache.spark.deploy.worker.Worker"
+      register: worker_status
+      retries: 10
+      delay: 5
+      until: worker_status.rc == 0
